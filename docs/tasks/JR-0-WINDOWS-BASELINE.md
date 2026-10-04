@@ -57,7 +57,580 @@ A) a Windows build succeeds and its artifact path plus smoke test are documented
 B) a reproducible blocker is documented with enough evidence for another agent to continue immediately.
 
 ## Status
-- State: ready
+- State: blocked (LLVM verified; fresh symlink creation fails WinError 1314)
 - Baseline branch: `jali-remote/foundation`
 - Upstream-derived default branch: `master`
 - Product behavior changes allowed: **none**
+
+## Execution record (2026-10-04)
+
+- State: blocked; no successful Windows executable or smoke test. See final outcomes below.
+- Tracking issue: https://github.com/Jalidev-organization/rustdesk/issues/2
+- Working branch: `jr/2-windows-baseline`; PR base must be `jali-remote/foundation`.
+- Source baseline: `ee7dfd2fb514fa86e8b5a234396c38ffb24b11d9`.
+- Recursive submodule: `libs/hbb_common` at `229b904508364c8997aad0fb5af57effac859f60`.
+- Receipt-driven review: off, decided by default; no review approval claimed.
+- Runtime/product source modifications: none.
+
+### Inspected sources
+
+`AGENTS.md`, `docs/JALI_REMOTE_PLAN.md`, `docs/JALI_REMOTE_AGENT_GUIDE.md`, this task,
+`README.md`, `.github/workflows/flutter-build.yml` (x64 Windows job),
+`.github/workflows/bridge.yml`, `build.py`, `vcpkg.json`, `Cargo.lock`,
+`flutter/pubspec.yaml`, `flutter/windows/CMakeLists.txt`, `.gitignore`,
+`src/lib.rs`, `flutter/lib/models/platform_model.dart`.
+The official Windows guide at https://rustdesk.com/docs/en/dev/build/windows/
+and README describe the deprecated Sciter build. The inherited Flutter workflow
+is authoritative for this modern-UI baseline.
+
+### Toolchain inventory and isolated preparation
+
+| Component | Revision/version and result |
+| --- | --- |
+| OS | Windows 11 Pro x64, 10.0.26200.9457 |
+| Visual Studio | Build Tools 2022 17.14.37516.0 (17.14.37); Flutter doctor validates Windows C++ tools |
+| MSVC | 14.44.35207, detected by vcpkg |
+| Windows SDK | 10.0.26100.0 |
+| Python | 3.12.10 |
+| Git | 2.55.0.windows.4 |
+| Existing Rust | rustc 1.97.1, cargo 1.97.1; global default retained |
+| Baseline Rust | rustc 1.75.0 (82e1608df), cargo 1.75.0 (1d8b05cdd), additionally installed through rustup |
+| rustup | 1.29.1 (d95a37b6a); rustup self-updated from 1.29.0 during toolchain installation |
+| Flutter | 3.24.5, framework dec2ee5c1f98f8e84a7d5380c05eb8a3d0a81668 |
+| Dart | 3.5.4 |
+| vcpkg | 9e593bb18ea69cc5095e012465dcd675a822ed0d, executable 2026-07-27-98d7cb0 |
+| CMake | Existing 4.4.2; workflow declares VCPKG_CMAKE_VERSION=4.3.0 |
+| LLVM | Workflow requires 15.0.6; not installed/verified yet |
+| Bridge | Workflow uses cargo-expand 1.0.95 and flutter_rust_bridge_codegen 1.80.1; not generated yet |
+
+Isolated local paths (not required on another machine):
+checkout `C:/Users/Jali-dev/Documents/rustdesk-jr0`, SDKs/cache
+`C:/Users/Jali-dev/Documents/jr0-tools`, logs `C:/Users/Jali-dev/Documents/jr0-logs`.
+No system PATH or Rust default was changed. Initial free C: capacity was 137.65 GB.
+The clean native dependency build requires downloads, CPU and disk space; no
+reliable total duration/size estimate was available before launch.
+
+### Commands and outcomes to date
+
+```powershell
+# From the parent directory, then the isolated checkout:
+git clone --branch jali-remote/foundation https://github.com/Jalidev-organization/rustdesk.git rustdesk-jr0
+git switch -c jr/2-windows-baseline
+git submodule update --init --recursive
+rustup toolchain install 1.75.0 --profile minimal
+# Outside the checkout:
+git clone --depth 1 --branch 3.24.5 https://github.com/flutter/flutter.git <tools>/flutter
+flutter --version
+flutter doctor -v
+flutter precache --windows
+git -C <tools>/flutter apply <repo>/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+git clone https://github.com/microsoft/vcpkg.git <tools>/vcpkg
+git -C <tools>/vcpkg checkout 9e593bb18ea69cc5095e012465dcd675a822ed0d
+<tools>/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+```
+
+All above completed successfully. Flutter doctor validates Visual Studio, Windows
+and network resources; Android is absent and intentionally out of scope. The
+detached historical Flutter SDK reports an unknown-channel warning, not a
+Windows prerequisite failure. Upstream's dropdown patch was applied to the
+isolated SDK, not the application repository.
+
+Downloaded the workflow's custom engine from
+`https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip`,
+SHA256 `EC8CABF36EE4FF24C8D98DE25B00E70781EB03876265AEE84D0FE554A110036E`,
+and copied its contents into the isolated SDK's
+`bin/cache/artifacts/engine/windows-x64-release/`, as the inherited workflow does.
+The release URL is mutable; record/compare the hash on any later download.
+
+Launched manifest dependency installation from repository root:
+
+```powershell
+$env:VCPKG_ROOT='<tools>/vcpkg'
+$env:VCPKG_DEFAULT_HOST_TRIPLET='x64-windows-static'
+$env:VCPKG_BINARY_SOURCES='clear;files,<tools>/vcpkg-cache,readwrite'
+& "$env:VCPKG_ROOT/vcpkg.exe" install --triplet x64-windows-static --x-install-root="$env:VCPKG_ROOT/installed"
+```
+
+vcpkg detected MSVC and scheduled 16 packages, including the repository's aom,
+FFmpeg, libvpx, libyuv, opus and mfx-dispatch overlay ports. No result yet.
+
+Launched the inherited Windows build entry point with the pinned Rust:
+
+```powershell
+$env:RUSTUP_TOOLCHAIN='1.75.0'
+$env:PATH='<tools>/flutter/bin;'+$env:PATH
+python build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+```
+
+This first probe starts with virtual-display Cargo compilation and currently
+fetches the locked Git dependencies. It does NOT certify full prerequisite
+readiness: vcpkg was still building and LLVM/bridge preparation remained pending.
+Do not interpret a later missing-prerequisite failure as an application defect.
+
+### Smoke-test checklist (not executed)
+
+1. Confirm `flutter/build/windows/x64/runner/Release/rustdesk.exe` and its bundled
+   DLL/data files exist; record executable SHA256.
+2. Launch the locally built executable and confirm a visible, responsive window
+   with no fatal startup error. Process existence alone is not a UI pass.
+3. Close and relaunch it; inspect application logs for startup failures.
+4. With two authorized Windows PCs on different networks, verify a normal
+   remote-control session and record connection/quality observations.
+
+No executable path/hash or smoke success is claimed until these checks run.
+Two-PC remote-control and latency evidence remain pending even if local launch
+later succeeds. Do not advance to JR-1 or rename the product.
+
+### Current hypothesis and exact next step
+
+No repository-caused blocker has been established yet. Complete the first
+pinned-toolchain probe and vcpkg installation, preserve their exact exit/error,
+then install/verify isolated LLVM 15.0.6 and generate the bridge according to
+`.github/workflows/bridge.yml` before the complete Windows build attempt.
+Only diagnose a concrete failure; do not change dependency pins speculatively.
+
+Regression surface: this execution record only. No existing application runtime
+path changed. Rollback boundary: remove this execution record without touching
+product source, SDK caches or other work. Documentation verification: structural
+readback and `git diff --check`; runtime verification is pending, not applicable
+to this passive documentation unit.
+
+## Reproducible blockers and completed probe outcomes
+
+This section supersedes the earlier in-progress entries. JR-0 meets reporting
+criterion **B**, not build-success criterion A. Do not merge this PR or advance
+JR-1 as if the client had been validated.
+
+| Operation | Observed result |
+| --- | --- |
+| `python build.py --portable --flutter --skip-portable-pack --hwcodec --vram` with Rust 1.75 | Python exit `-1`; native hwcodec custom build exits `101`, missing libclang |
+| Virtual-display sub-build inside that command | Release build succeeded in 5m 16s; auxiliary DLL only, not a runnable RustDesk client |
+| `flutter pub get` with Flutter 3.24.5 | Exit `1`, Windows plugin symlink prerequisite |
+| `flutter build windows --release` with Flutter 3.24.5 | Exit `1`, same symlink prerequisite reproduced independently |
+| LLVM 15.0.6 download plus silent isolated installation | Tool policy rejected the command before execution; not installed, no workaround attempted |
+| vcpkg manifest dependency installation | Exit `0`, all 16 packages installed successfully in 19 min |
+
+### Blocker 1: missing LLVM/libclang
+
+The inherited workflow explicitly installs LLVM 15.0.6. The actual Rust build
+fails in `hwcodec v0.7.1` (`778df1f9`), using `bindgen 0.59.2`:
+
+```text
+error: failed to run custom build command for `hwcodec v0.7.1`
+process didn't exit successfully: build-script-build (exit code: 101)
+Unable to find libclang: "couldn't find any valid shared libraries matching:
+['clang.dll', 'libclang.dll'], set the `LIBCLANG_PATH` environment variable to a
+path where one of these files can be found (invalid: [])"
+Error occurred when executing:
+`cargo build --locked --features hwcodec,vram,flutter --lib --release`. Exiting.
+```
+
+No codec/source fix is warranted: this is the missing native prerequisite. The
+official installer URL is
+`https://github.com/llvm/llvm-project/releases/download/llvmorg-15.0.6/LLVM-15.0.6-win64.exe`,
+asset size 290,951,930 bytes confirmed through the LLVM GitHub release API.
+The combined download/`Start-Process` silent installation command was rejected
+as `blocked by policy`, before execution. Do not retry through another launcher
+to bypass that denial. Install the prerequisite through a permitted process,
+then verify `clang --version` reports 15.0.6 and `libclang.dll` exists before
+setting process-local `LIBCLANG_PATH`.
+
+### Blocker 2: Windows plugin symlink permission
+
+Both Flutter commands above emit exactly:
+
+```text
+Building with plugins requires symlink support.
+
+Please enable Developer Mode in your system settings. Run
+  start ms-settings:developers
+to open settings.
+```
+
+The current process is not administrator (`IS_ADMIN=False`). No Developer Mode
+or global security setting was changed. The next operator must explicitly
+resolve the Windows symlink prerequisite. Do not disable security checks or
+change application/plugin code to hide it.
+
+`flutter pub get` downloaded dependencies and automatically changed 16 lockfile
+entries to match the pinned Flutter SDK before failing. Its diff was saved to
+`<logs>/pubspec-lock-generated.diff`, then only that generated modification was
+restored. No dependency upgrade or regenerated lockfile belongs in this PR.
+
+### Environment caveat: inherited Cargo output directory
+
+The probe inherited `CARGO_TARGET_DIR=C:/h`. The successful auxiliary DLL is:
+
+- Path: `C:/h/release/dylib_virtual_display.dll` (also in `release/deps/`).
+- Size: 309,760 bytes.
+- SHA256: `BDA82AB0A05A7408672B219DF7AC539D03DC6368FFDC3868897661D6385BB16D`.
+
+This is **not** `rustdesk.exe`, not a completed application, and was not launched.
+No client executable SHA256 or smoke-test pass exists.
+
+`build.py` checks/copies files from repository-relative `target/release`, and
+Flutter Windows CMake installs `../../target/release/librustdesk.dll`. Therefore
+remove the inherited target-directory variable **in the next child shell only**:
+`Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue`. Do not edit
+machine-wide environment configuration or delete the shared `C:/h` cache.
+
+### Exact continuation
+
+After the operator resolves symlink permission and installs permitted LLVM
+15.0.6, verify the Flutter prerequisite first:
+
+```powershell
+$repo='C:/Users/Jali-dev/Documents/rustdesk-jr0'
+$tools='C:/Users/Jali-dev/Documents/jr0-tools'
+$env:PATH="$tools/flutter/bin;"+$env:PATH
+Set-Location "$repo/flutter"
+flutter pub get
+# Require exit 0, then inspect any generated lockfile delta. Do not commit it.
+```
+
+Then prepare the generated bridge following `.github/workflows/bridge.yml`:
+`cargo-expand 1.0.95`, `flutter_rust_bridge_codegen 1.80.1 --features uuid`, and
+the workflow's Flutter 3.22.3 generation SDK/pubspec adaptation. The generated
+files are CI prerequisites, absent from a clean checkout. Do not borrow a bridge
+artifact from a different source revision. The workflow's exact generator call is:
+
+```text
+flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+```
+
+Once vcpkg and the matching bridge are ready, the next full attempt is:
+
+```powershell
+Set-Location $repo
+Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
+$env:RUSTUP_TOOLCHAIN='1.75.0'
+$env:VCPKG_ROOT="$tools/vcpkg"
+$env:VCPKG_DEFAULT_HOST_TRIPLET='x64-windows-static'
+$env:LIBCLANG_PATH="$tools/llvm-15.0.6/bin" # adjust only to the verified installation
+python build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+```
+
+The expected completed-client path is
+`<repo>/flutter/build/windows/x64/runner/Release/rustdesk.exe`, conditional on
+success. Hash it and perform the previously documented smoke checklist; never
+claim UI success from the auxiliary DLL or a process-only check.
+
+### Scope and continuity
+
+- Existing runtime paths changed: none.
+- Files modified intentionally: this task document only.
+- No branding, networking, relay/rendezvous, capture, codec or product changes.
+- No migrations. No changes to the foundation branch or its PR #1.
+- Local full logs remain outside the versioned tree; bounded errors and exact
+  continuation above are sufficient to resume from GitHub alone.
+- Tracking PR: https://github.com/Jalidev-organization/rustdesk/pull/6 (draft,
+  base `jali-remote/foundation`). Keep issue #2 open until build and smoke evidence.
+
+### Local evidence identifiers
+
+Full UTF-8 text logs are outside the repository. These hashes identify the
+completed probe logs; no credentials or raw environment dump is published:
+
+| Log under `<logs>/` | SHA256 |
+| --- | --- |
+| `windows-build-first.log` | `D5441D622FE55CBD842542F4EDD04E91E14FE11EAF546B2AEE19B7B169AB2424` |
+| `flutter-pub-get.log` | `1A7E7A403DBAF78C351F7823D2B156683DF8DFED938EDCD163AD53482BFE2444` |
+| `flutter-windows-stage.log` | `8D9A3C7555DDE427C6A67285E63A3072DB71E19BB07F709D1A1B1544F3F6D413` |
+
+### Final native dependency result and verification
+
+The existing vcpkg process finished, without cancellation or a second attempt:
+`All requested installations completed successfully in: 19 min`, `VCPKG_EXIT=0`.
+`vcpkg list --x-install-root=<tools>/vcpkg/installed` confirmed aom 3.14.1,
+FFmpeg 7.1.1 with amf/nvcodec/qsv, libjpeg-turbo 3.2.0, libvpx 1.15.2,
+libyuv 1857, mfx-dispatch 1.35.1#5 and opus 1.5.2, plus their native tooling.
+Final `vcpkg-install.log` SHA256:
+`287C358DE735A6D59CAF671C4BECADAC7543158B179D81564EA7015448D69DC6`.
+
+All processes launched for the build/dependency probes have completed. No
+successful client build, bridge generation or GUI launch was performed. The
+remaining prerequisites are LLVM/libclang and Windows symlink permission,
+followed by matching bridge generation. No repeated full build was attempted
+while those known prerequisites remained unavailable.
+
+Final proportional documentation verification: read back the full task document,
+checked the complete diff against `jali-remote/foundation`, and ran
+`git diff --check`. Only this documentation file belongs to the change; generated
+lockfile changes were restored and all build/download logs stay external.
+The inherited build warnings were left untouched. No review receipt or runtime
+approval is claimed. The PR remains draft and must not be merged as a validated
+Windows baseline.
+## Resumed prerequisite verification (2026-10-04)
+
+This update supersedes the earlier symlink blocker. Continued the **same**
+checkout and `jr/2-windows-baseline` branch at `c091e87a238cd6ee712298d50e29851412f6d8b5`;
+no clone, reset or restart. Re-read repository instructions, task, native bridge
+workflow, issue #2 and PR #6. Receipt-driven review remains off/default.
+
+- Flutter 3.24.5 `flutter pub get`: **exit 0**. The previous symlink error no longer
+  occurs. No global security setting or environment variable was changed.
+- The generated `flutter/pubspec.lock` delta was saved externally to
+  `<logs>/resume-pubspec-lock-generated.diff`, then only that own generated delta
+  was restored. No product/dependency source edit is included.
+- `<logs>/resume-flutter-pub-get.log` SHA256:
+  `4B4B86E94A474B3B1E7F05D5EE9722372052117D036699963BD8A29F02FFCD67`.
+- `vcpkg list --x-install-root=<tools>/vcpkg/installed` confirms the same 16
+  previously installed native packages. They were not rebuilt or replaced.
+- LLVM 15.0.6 is **not yet located or verified**. This does not establish whether
+  the operator installed it somewhere else. `clang` is absent from the current
+  PATH; process/user/machine `LIBCLANG_PATH` values are empty. No LLVM entry was
+  found in the inspected machine/user uninstall registry locations.
+
+Bounded location search inspected roots `C:/`, `D:/`, `E:/`, `F:/`, `G:/`,
+`C:/Program Files`, `C:/Program Files (x86)`, the user's `Downloads`,
+`AppData/Local/Programs`, `bin`, and the isolated `jr0-tools` directory. No LLVM
+installation/installer candidate or `clang.exe`/`libclang.dll` was identified.
+Specifically, neither `C:/Program Files/LLVM/bin/libclang.dll` nor
+`<tools>/llvm-15.0.6/bin/libclang.dll` exists. No whole-disk recursive search,
+installation retry, security change or policy bypass was performed.
+
+### Current blocking input and exact next step
+
+Obtain the actual LLVM 15.0.6 installation directory from the operator. Then
+verify, using that confirmed path rather than a guessed replacement:
+
+```powershell
+$llvm='<operator-confirmed LLVM 15.0.6 directory>'
+& "$llvm/bin/clang.exe" --version
+Test-Path "$llvm/bin/libclang.dll"
+$env:LIBCLANG_PATH="$llvm/bin" # process-local only
+python -c "import ctypes, os; ctypes.CDLL(os.path.join(os.environ['LIBCLANG_PATH'], 'libclang.dll')); print('LIBCLANG_LOAD_OK')"
+```
+
+Require the correct version, DLL existence and usable load before matching bridge
+generation and the documented full build command. Neither bridge generation nor
+a new full build was launched while this prerequisite remained unverified.
+No completed client executable or smoke result is claimed; PR #6 stays draft,
+issue #2 stays open, and no merge or JR-1 advance is authorized by this checkpoint.
+## Verified prerequisites and bridge preparation checkpoint
+
+A later machine recheck found the operator-installed LLVM in
+`C:/Program Files/LLVM/bin`. `clang --version` reports **15.0.6** and a Python
+`ctypes.CDLL` load of `libclang.dll` with process-local `LIBCLANG_PATH` succeeds
+(`LIBCLANG_LOAD_OK`). DLL SHA256:
+`B90F2E03218825C637CA313C6F4781F241845BA1679EE3618AF36A2A967A22CF`.
+The previous LLVM location blocker is resolved. Flutter 3.24.5 `pub get` again
+exits 0; its generated lockfile delta was saved externally and restored.
+Existing vcpkg dependencies remain installed. No global environment changed.
+
+Preparing the bridge with `.github/workflows/bridge.yml` pins: Rust 1.75.0 plus
+rustfmt, cargo-expand 1.0.95, flutter_rust_bridge_codegen 1.80.1 with UUID, and
+separate Flutter 3.22.3 SDK at `<tools>/flutter-bridge-3.22.3` (framework
+`b0850beeb25f6d5b10426284f506557f66181b36`). cargo-expand installed successfully.
+Other preparation/generation results remain pending at this checkpoint.
+
+The workflow's `extended_text: 14.0.0` to `13.0.0` adaptation is confined to
+`<tools>/bridge-stage-533d38d67`, made with `git archive` of the same checkout's
+commit `533d38d67` plus an archive of its pinned `hbb_common` submodule. This is
+an external generation copy, not a fresh project clone or checkout reset. The
+real product pubspec/source is unchanged. The inherited bridge CI host is Linux;
+local generator execution will use Windows with the same pinned tools/invocation.
+`wsl --list --quiet` reports WSL is not installed; no system installation attempted.
+
+Next: finish SDK/tool installation and staged pub resolution, run the workflow's
+exact bridge generator command, copy only its declared generated outputs to the
+original checkout, then run the documented native Windows build with
+`CARGO_TARGET_DIR` removed only in the child build shell. No completed client,
+GUI launch or criterion A proof exists yet. Progress is also recorded in issue #2;
+PR #6 remains draft on the foundation base, without merge or JR-1 work.
+## Corrected symlink diagnosis: fresh generation still blocked
+
+The earlier statement that the symlink prerequisite was resolved was too strong.
+`flutter pub get` exit 0 in the existing checkout does **not** prove that this
+process can create new links. No product change is warranted by this result.
+
+Completed isolated preparation: cargo-expand 1.0.95 and
+flutter_rust_bridge_codegen 1.80.1 installed successfully with Rust 1.75
+(`EXPAND_INSTALL_EXIT=0`, `FRB_INSTALL_EXIT=0`); rustfmt is installed. Bridge SDK
+Flutter 3.22.3 / Dart 3.4.4 is ready. Staging `flutter pub get` resolves/downloads
+packages after the exact `extended_text` adaptation, then exits **1**:
+
+```text
+Building with plugins requires symlink support.
+Please enable Developer Mode in your system settings.
+```
+
+Controlled independent probes establish the actual prerequisite failure:
+
+| Probe | Result |
+| --- | --- |
+| Python `os.symlink` in original checkout Windows ephemeral directory | WinError 1314, no link created |
+| Same Python call in staging Windows ephemeral directory | WinError 1314, no link created |
+| Fresh Dart `Link.createSync` with Dart 3.4.4 (Flutter 3.22.3) | Exit 1, OS error 1314 |
+| Same Dart call with Dart 3.5.4 (Flutter 3.24.5) | Exit 1, OS error 1314 |
+
+Therefore this is not a privilege requirement unique to Flutter 3.22.3 or a
+staging-directory permission difference. The process is not administrator.
+Read-only registry inspection finds the `AppModelUnlock` key but no
+`AllowDevelopmentWithoutDevLicense` value. No registry/security change was made.
+
+Both SDKs' `packages/flutter_tools/lib/src/flutter_plugins.dart` write plugin
+metadata before conditionally creating links in `refreshPluginsList` (only when
+the plugin-change flags request it). Both use `link.createSync(path)` for new
+links. The existing checkout reports 17 Windows plugins but its `.plugin_symlinks`
+directory contains **zero** links (directory last modified 13:49:05, before the
+later successful pub resolution). Thus the successful repeated `pub get` did not
+exercise fresh creation. Do not infer healthy symlink permissions from its exit.
+The Windows build path independently calls `createPluginSymlinks`.
+
+Local reproducible probe sources are outside Git: `<tools>/symlink_probe.py`
+(checkout and staging) and `<tools>/symlink_probe.dart` (both Dart SDKs).
+Log SHA256 identifiers:
+- `bridge-stage-pub-get.log`: `C2CA65B20E6B234F53227342B87BE4C34FB21A6589A53313D43D89463F6A83AA`.
+- `symlink-python-comparison.log`: `9B102337E063E97DEEC1E2FFE76E80B634304D43A44766E0A0B9B82187D9708E`.
+- Both Dart logs: `D6B01E26614DF3E20F0D0D13C5CD01DBCB2E8B88D821404FF834C3CAECF7B04D`.
+
+Exact next step: the operator must resolve fresh-link permission for this process,
+then require the external Python probe and both Dart probes to pass. Re-run
+Flutter 3.22.3 `pub get` in the existing generation staging directory and require
+exit 0 before the exact bridge generator/full build. No generated bridge, full
+client build or GUI smoke was claimed. LLVM is verified, vcpkg is preserved,
+all installation/probe processes completed, and PR #6 remains draft without merge.## Resumed generation and native build after prerequisite repair
+
+The operator's subsequent Windows setup resolved fresh-link creation. No security
+setting or global environment was changed by this resumption. The existing
+Flutter 3.22.3 staging `pub get` now exits **0** (external log
+`bridge-stage-pub-get-resolved.log`); the real Flutter 3.24.5 checkout retains its
+original dependencies and existing plugin links. LLVM 15.0.6 and vcpkg's 16
+installed packages were reused, not reinstalled.
+
+Current source integrity: `git diff --name-only 533d38d67 HEAD` lists only this
+task document; staged `src/flutter_ffi.rs`, `Cargo.toml`, `Cargo.lock` and pinned
+`libs/hbb_common/src/lib.rs` hashes equal the checkout. The generation adaptation
+remains confined to the existing external staging directory.
+
+The first generator call exited **101** because the inherited process had
+`RUST_LOG=warn`. Codegen 1.80.1's `src/logs.rs` accepts only `debug` or `info`
+and panics otherwise. Setting `RUST_LOG=info` **in the generator process only**
+removed this environment blocker. No source change was needed.
+
+Successful generation (exit **0**, build_runner: 153 outputs / 445 actions):
+
+```powershell
+$env:LIBCLANG_PATH = 'C:/Program Files/LLVM/bin'
+$env:PATH = '<tools>/flutter-bridge-3.22.3/bin;<tools>/bridge-tools/bin;' + $env:PATH
+$env:RUSTUP_TOOLCHAIN = '1.75.0'
+$env:RUST_LOG = 'info'
+$env:VCPKG_ROOT = '<tools>/vcpkg'
+$env:VCPKG_DEFAULT_HOST_TRIPLET = 'x64-windows-static'
+$env:CARGO_TARGET_DIR = '<tools>/bridge-generation-target'
+# cwd: <tools>/bridge-stage-533d38d67
+flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+Copy-Item ./flutter/macos/Runner/bridge_generated.h ./flutter/ios/Runner/bridge_generated.h
+```
+
+Only the six declared workflow artifacts were copied to the original checkout;
+all six match its ignore rules. No unrelated build_runner outputs, pubspec or
+lockfile changes were copied. Logs: `bridge-generation.log` (initial panic) and
+`bridge-generation-info.log` (successful run), outside Git.
+
+The supported Windows command is now running with the main SDK/custom engine:
+
+```powershell
+# cwd: C:/Users/Jali-dev/Documents/rustdesk-jr0
+Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
+$env:RUSTUP_TOOLCHAIN = '1.75.0'
+$env:LIBCLANG_PATH = 'C:/Program Files/LLVM/bin'
+$env:VCPKG_ROOT = '<tools>/vcpkg'
+$env:VCPKG_DEFAULT_HOST_TRIPLET = 'x64-windows-static'
+$env:PATH = '<tools>/flutter/bin;' + $env:PATH
+python build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+```
+
+Checkpoint status: native compilation in progress; full external output is
+`<logs>/windows-build-resolved.log`. No final client executable, successful build
+or GUI smoke is claimed at this checkpoint. Next: collect the build's actual
+exit status, inspect the real runner executable (path, size, SHA256), then perform
+coordinated visual launch, close/reopen and fatal-log checks. Issue #2 stays open;
+PR #6 stays draft on `jali-remote/foundation`, awaiting user review, without merge.
+## Native Windows build completed; visual smoke pending
+
+The resumed official build completed with **WINDOWS_BUILD_EXIT=0**. Auxiliary
+virtual display Release compilation took 3m 28s; the main Rust Release build
+finished in 11m 18s with 16 existing warnings, and Flutter Windows completed in
+163.9s. No source workaround or cleanup was applied. The build resolved the
+native LLVM prerequisite using the actual installed library.
+
+Final **client runner**, not the auxiliary DLL:
+- Path: `C:/Users/Jali-dev/Documents/rustdesk-jr0/flutter/build/windows/x64/runner/Release/rustdesk.exe`.
+- Size: **360960 bytes**.
+- SHA256: `77A333854C407F79EA10FAA487F4C8EB121863E12AF9F275ABB782AD037C1B66`.
+- Keep the entire Release directory alongside this runner; Flutter runtime,
+  plugins, native Rust library and data are required. The runner alone is not
+  a self-contained portable distribution (portable packaging was skipped).
+
+Evidence hashes:
+- Successful bridge log: `457B0F0995D83AF694E49E89EC6F0625106BC3986981BE729B8CF51CC360C92C`.
+- Completed Windows build log: `DD9CCE82B86E2BAE8F62BCA292E1EEB27F2472348CF51FA500C1DECDEF26EA38`.
+
+`git status --short` remains empty after the build: no tracked dependency,
+source or submodule changes. Only task documentation is versioned. **Criterion A
+is still pending**: the coordinator has the exact executable and must verify a
+real functional graphical window, close it, reopen it, and inspect fatal startup
+logs before a success claim. No launch was inferred from compilation. Two-PC
+cross-network validation remains separate. Issue #2 remains open and PR #6 draft,
+awaiting the user's review; neither merge nor JR-1 is authorized.
+## Final local baseline: JR-0 CRITERION A ACHIEVED
+
+**Criterion A is achieved for the local Windows build and graphical smoke**, not
+for a remote support session between two PCs. The coordinator performed real
+visual checks with the permitted desktop tool; this is not inferred from a PID.
+The executable path/size/SHA256 above remain unchanged after the checks.
+
+| Smoke check | Observed result |
+| --- | --- |
+| First launch from the exact Release runner | RustDesk home window rendered; connection form, Connect control and Ready status visible |
+| Basic UI interaction | Title-bar maximize worked; stable maximized window, application responding |
+| Normal close | Alt+F4; process query before relaunch found no RustDesk process |
+| Reopen | New process and different window; home rendered correctly, responding |
+| Second close | Alt+F4; independent final process query found no RustDesk process |
+| Fatal startup evidence | Both launches' logs reviewed; no fatal/panic/unhandled failure observed, but nonfatal errors exist below |
+
+Exact launch shape used by the coordinator (Release working directory):
+
+```powershell
+$release = 'C:/Users/Jali-dev/Documents/rustdesk-jr0/flutter/build/windows/x64/runner/Release'
+Start-Process -FilePath "$release/rustdesk.exe" -WorkingDirectory $release -PassThru
+# Real desktop visual check; Alt+F4, process absence, then repeat launch/check/close.
+Get-CimInstance Win32_Process -Filter "Name = 'rustdesk.exe'"
+```
+
+Evidence is deliberately textual and sanitized. Normal UI contains a device ID
+and one-time password; screenshots, UI trees, credentials and raw startup logs
+were **not** added to Git/GitHub. Local logs remain at
+`C:/Users/Jali-dev/AppData/Roaming/RustDesk/log`. Completed snapshots:
+
+| Log | Bytes | SHA256 |
+| --- | ---: | --- |
+| `rustdesk_r2026-10-04_16-57-57.log` | 784 | `1501EA2D0743173FE186FA882F7E0A6BF088778D72C44888F168B2409EE3B4E7` |
+| `rustdesk_rCURRENT.log` | 673 | `584A25FC55C6AE6EE10AB664AD17ABF273D107AA00C6D1362C596C4BF597F679` |
+| `check-hwcodec-config/rustdesk_r2026-10-04_16-57-57.log` | 872 | `BCFD30C87B3498B981F6D10902AE81ADCF41E3DE6ECA461C284AE14D4AB02E04` |
+| `check-hwcodec-config/rustdesk_rCURRENT.log` | 872 | `AE4F4F8DBA03206E05002998604D930001F7D4145398B3E3F7318410247C27FD` |
+
+**Known limits, not silently fixed or called error-free:**
+- `printer_driver_adapter.dll` is absent from the raw runner bundle; printer
+  service init logs failure. `src/server.rs` handles it by logging and continuing.
+  The inherited Windows workflow downloads the adapter/drivers separately into
+  packaging staging after the build (lines 299-323), with a nonfatal fallback.
+  No driver installation or product source change was performed; remote printing
+  is not validated by this baseline.
+- IPv6 bind reports OS error 10051 and IPv6 STUN resolution fails on this machine.
+  No networking settings or transport code were changed; IPv6 is unvalidated.
+- NVENC H.264/HEVC hardware capability probes log `avcodec_open2` / Operation not
+  permitted. No codec/driver changes were made; hardware encoding is unvalidated.
+- No remote connection, capture/input/clipboard/file-transfer session, unattended
+  install, relay/P2P/rendezvous validation or cross-network two-PC test occurred.
+- This is a raw Release bundle, not an installer/standalone packaged portable exe.
+
+Final minimization/readback: only this passive task document changed against the
+foundation base; all generated artifacts/builds remain ignored or outside Git.
+No existing application runtime path, product dependency or submodule revision
+was changed. No branding, optimization, JR-1 or migration work. Issue #2 stays
+**open**, PR #6 stays **draft**, base `jali-remote/foundation`; no merge until the
+user reviews the result. Next is that review and coordinated two-PC validation,
+not automatic JR-1 advancement.
