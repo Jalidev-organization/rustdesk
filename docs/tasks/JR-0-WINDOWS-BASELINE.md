@@ -575,3 +575,62 @@ real functional graphical window, close it, reopen it, and inspect fatal startup
 logs before a success claim. No launch was inferred from compilation. Two-PC
 cross-network validation remains separate. Issue #2 remains open and PR #6 draft,
 awaiting the user's review; neither merge nor JR-1 is authorized.
+## Final local baseline: JR-0 CRITERION A ACHIEVED
+
+**Criterion A is achieved for the local Windows build and graphical smoke**, not
+for a remote support session between two PCs. The coordinator performed real
+visual checks with the permitted desktop tool; this is not inferred from a PID.
+The executable path/size/SHA256 above remain unchanged after the checks.
+
+| Smoke check | Observed result |
+| --- | --- |
+| First launch from the exact Release runner | RustDesk home window rendered; connection form, Connect control and Ready status visible |
+| Basic UI interaction | Title-bar maximize worked; stable maximized window, application responding |
+| Normal close | Alt+F4; process query before relaunch found no RustDesk process |
+| Reopen | New process and different window; home rendered correctly, responding |
+| Second close | Alt+F4; independent final process query found no RustDesk process |
+| Fatal startup evidence | Both launches' logs reviewed; no fatal/panic/unhandled failure observed, but nonfatal errors exist below |
+
+Exact launch shape used by the coordinator (Release working directory):
+
+```powershell
+$release = 'C:/Users/Jali-dev/Documents/rustdesk-jr0/flutter/build/windows/x64/runner/Release'
+Start-Process -FilePath "$release/rustdesk.exe" -WorkingDirectory $release -PassThru
+# Real desktop visual check; Alt+F4, process absence, then repeat launch/check/close.
+Get-CimInstance Win32_Process -Filter "Name = 'rustdesk.exe'"
+```
+
+Evidence is deliberately textual and sanitized. Normal UI contains a device ID
+and one-time password; screenshots, UI trees, credentials and raw startup logs
+were **not** added to Git/GitHub. Local logs remain at
+`C:/Users/Jali-dev/AppData/Roaming/RustDesk/log`. Completed snapshots:
+
+| Log | Bytes | SHA256 |
+| --- | ---: | --- |
+| `rustdesk_r2026-10-04_16-57-57.log` | 784 | `1501EA2D0743173FE186FA882F7E0A6BF088778D72C44888F168B2409EE3B4E7` |
+| `rustdesk_rCURRENT.log` | 673 | `584A25FC55C6AE6EE10AB664AD17ABF273D107AA00C6D1362C596C4BF597F679` |
+| `check-hwcodec-config/rustdesk_r2026-10-04_16-57-57.log` | 872 | `BCFD30C87B3498B981F6D10902AE81ADCF41E3DE6ECA461C284AE14D4AB02E04` |
+| `check-hwcodec-config/rustdesk_rCURRENT.log` | 872 | `AE4F4F8DBA03206E05002998604D930001F7D4145398B3E3F7318410247C27FD` |
+
+**Known limits, not silently fixed or called error-free:**
+- `printer_driver_adapter.dll` is absent from the raw runner bundle; printer
+  service init logs failure. `src/server.rs` handles it by logging and continuing.
+  The inherited Windows workflow downloads the adapter/drivers separately into
+  packaging staging after the build (lines 299-323), with a nonfatal fallback.
+  No driver installation or product source change was performed; remote printing
+  is not validated by this baseline.
+- IPv6 bind reports OS error 10051 and IPv6 STUN resolution fails on this machine.
+  No networking settings or transport code were changed; IPv6 is unvalidated.
+- NVENC H.264/HEVC hardware capability probes log `avcodec_open2` / Operation not
+  permitted. No codec/driver changes were made; hardware encoding is unvalidated.
+- No remote connection, capture/input/clipboard/file-transfer session, unattended
+  install, relay/P2P/rendezvous validation or cross-network two-PC test occurred.
+- This is a raw Release bundle, not an installer/standalone packaged portable exe.
+
+Final minimization/readback: only this passive task document changed against the
+foundation base; all generated artifacts/builds remain ignored or outside Git.
+No existing application runtime path, product dependency or submodule revision
+was changed. No branding, optimization, JR-1 or migration work. Issue #2 stays
+**open**, PR #6 stays **draft**, base `jali-remote/foundation`; no merge until the
+user reviews the result. Next is that review and coordinated two-PC validation,
+not automatic JR-1 advancement.
