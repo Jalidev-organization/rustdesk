@@ -91,18 +91,26 @@ Deliverables:
 Exit criterion:
 A clean fork build can establish a normal remote-control session without Jali-specific code.
 
-### JR-1 — Self-hosted connectivity
-Goal: remove dependence on public infrastructure for our tests.
+### JR-1 — Personal-PC self-hosted connectivity
+Goal: remove dependence on public infrastructure for our tests while keeping the first deployment personal and minimal.
+
+Initial deployment decision:
+- Héctor's own Windows PC is the **first-choice host** for `hbbs` (ID/rendezvous) and `hbbr` (relay).
+- Do **not** purchase or provision Hetzner/VPS infrastructure for v0 unless testing proves the home/office connection cannot reliably expose the required services (for example because of CGNAT or an equivalent network limitation).
+- The server only needs to run when Héctor needs Jali Remote for support; 24/7 production availability is not a v0 requirement.
+- Preserve RustDesk's direct P2P attempt. The relay is a fallback, not a reason to force all session traffic through the server.
 
 Deliverables:
-- self-hosted rendezvous/relay setup,
-- documented ports and deployment,
+- run `hbbs` + `hbbr` on Héctor's Windows PC,
+- verify public reachability / router / firewall prerequisites,
+- detect and document CGNAT or other inbound-connectivity blockers if present,
+- documented ports and startup procedure,
 - client configuration procedure,
 - direct-vs-relay verification,
 - reconnection test.
 
 Exit criterion:
-Two Windows PCs on unrelated internet connections can connect through infrastructure controlled by Jali.
+Two Windows PCs on unrelated internet connections can connect using Héctor's PC as the Jali-controlled rendezvous/relay host. External VPS infrastructure is considered only if this test demonstrates a real need.
 
 ### JR-2 — Windows support baseline
 Goal: validate all functions needed for real customer support.
@@ -111,11 +119,17 @@ Required test matrix:
 - mouse,
 - keyboard,
 - fullscreen,
-- clipboard,
+- clipboard text copy/paste in both directions,
+- image/clipboard behavior where supported,
 - file transfer,
+- Windows-to-Windows file copy/paste,
+- Windows-to-Windows drag-and-drop of files (explicitly verify the actual UX; do not assume support),
 - unattended access,
-- UAC/elevation behavior,
-- restart/reconnect,
+- UAC/elevation and Secure Desktop behavior during software installation,
+- ability to interact with authorized administrative prompts when Jali Remote is correctly installed/elevated,
+- restart/reconnect and return after Windows reboot,
+- Windows login/lock-screen support where the inherited implementation permits it,
+- fullscreen operation suitable for working as though seated at the remote PC,
 - multiple displays if already supported without new work.
 
 Exit criterion:
