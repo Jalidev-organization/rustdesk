@@ -490,4 +490,61 @@ then require the external Python probe and both Dart probes to pass. Re-run
 Flutter 3.22.3 `pub get` in the existing generation staging directory and require
 exit 0 before the exact bridge generator/full build. No generated bridge, full
 client build or GUI smoke was claimed. LLVM is verified, vcpkg is preserved,
-all installation/probe processes completed, and PR #6 remains draft without merge.
+all installation/probe processes completed, and PR #6 remains draft without merge.## Resumed generation and native build after prerequisite repair
+
+The operator's subsequent Windows setup resolved fresh-link creation. No security
+setting or global environment was changed by this resumption. The existing
+Flutter 3.22.3 staging `pub get` now exits **0** (external log
+`bridge-stage-pub-get-resolved.log`); the real Flutter 3.24.5 checkout retains its
+original dependencies and existing plugin links. LLVM 15.0.6 and vcpkg's 16
+installed packages were reused, not reinstalled.
+
+Current source integrity: `git diff --name-only 533d38d67 HEAD` lists only this
+task document; staged `src/flutter_ffi.rs`, `Cargo.toml`, `Cargo.lock` and pinned
+`libs/hbb_common/src/lib.rs` hashes equal the checkout. The generation adaptation
+remains confined to the existing external staging directory.
+
+The first generator call exited **101** because the inherited process had
+`RUST_LOG=warn`. Codegen 1.80.1's `src/logs.rs` accepts only `debug` or `info`
+and panics otherwise. Setting `RUST_LOG=info` **in the generator process only**
+removed this environment blocker. No source change was needed.
+
+Successful generation (exit **0**, build_runner: 153 outputs / 445 actions):
+
+```powershell
+$env:LIBCLANG_PATH = 'C:/Program Files/LLVM/bin'
+$env:PATH = '<tools>/flutter-bridge-3.22.3/bin;<tools>/bridge-tools/bin;' + $env:PATH
+$env:RUSTUP_TOOLCHAIN = '1.75.0'
+$env:RUST_LOG = 'info'
+$env:VCPKG_ROOT = '<tools>/vcpkg'
+$env:VCPKG_DEFAULT_HOST_TRIPLET = 'x64-windows-static'
+$env:CARGO_TARGET_DIR = '<tools>/bridge-generation-target'
+# cwd: <tools>/bridge-stage-533d38d67
+flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+Copy-Item ./flutter/macos/Runner/bridge_generated.h ./flutter/ios/Runner/bridge_generated.h
+```
+
+Only the six declared workflow artifacts were copied to the original checkout;
+all six match its ignore rules. No unrelated build_runner outputs, pubspec or
+lockfile changes were copied. Logs: `bridge-generation.log` (initial panic) and
+`bridge-generation-info.log` (successful run), outside Git.
+
+The supported Windows command is now running with the main SDK/custom engine:
+
+```powershell
+# cwd: C:/Users/Jali-dev/Documents/rustdesk-jr0
+Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
+$env:RUSTUP_TOOLCHAIN = '1.75.0'
+$env:LIBCLANG_PATH = 'C:/Program Files/LLVM/bin'
+$env:VCPKG_ROOT = '<tools>/vcpkg'
+$env:VCPKG_DEFAULT_HOST_TRIPLET = 'x64-windows-static'
+$env:PATH = '<tools>/flutter/bin;' + $env:PATH
+python build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+```
+
+Checkpoint status: native compilation in progress; full external output is
+`<logs>/windows-build-resolved.log`. No final client executable, successful build
+or GUI smoke is claimed at this checkpoint. Next: collect the build's actual
+exit status, inspect the real runner executable (path, size, SHA256), then perform
+coordinated visual launch, close/reopen and fatal-log checks. Issue #2 stays open;
+PR #6 stays draft on `jali-remote/foundation`, awaiting user review, without merge.
