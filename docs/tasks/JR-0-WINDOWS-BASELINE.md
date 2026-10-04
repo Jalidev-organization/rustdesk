@@ -57,7 +57,7 @@ A) a Windows build succeeds and its artifact path plus smoke test are documented
 B) a reproducible blocker is documented with enough evidence for another agent to continue immediately.
 
 ## Status
-- State: in progress (LLVM and Flutter prerequisites verified; bridge/full build pending)
+- State: blocked (LLVM verified; fresh symlink creation fails WinError 1314)
 - Baseline branch: `jali-remote/foundation`
 - Upstream-derived default branch: `master`
 - Product behavior changes allowed: **none**
@@ -438,3 +438,56 @@ original checkout, then run the documented native Windows build with
 `CARGO_TARGET_DIR` removed only in the child build shell. No completed client,
 GUI launch or criterion A proof exists yet. Progress is also recorded in issue #2;
 PR #6 remains draft on the foundation base, without merge or JR-1 work.
+## Corrected symlink diagnosis: fresh generation still blocked
+
+The earlier statement that the symlink prerequisite was resolved was too strong.
+`flutter pub get` exit 0 in the existing checkout does **not** prove that this
+process can create new links. No product change is warranted by this result.
+
+Completed isolated preparation: cargo-expand 1.0.95 and
+flutter_rust_bridge_codegen 1.80.1 installed successfully with Rust 1.75
+(`EXPAND_INSTALL_EXIT=0`, `FRB_INSTALL_EXIT=0`); rustfmt is installed. Bridge SDK
+Flutter 3.22.3 / Dart 3.4.4 is ready. Staging `flutter pub get` resolves/downloads
+packages after the exact `extended_text` adaptation, then exits **1**:
+
+```text
+Building with plugins requires symlink support.
+Please enable Developer Mode in your system settings.
+```
+
+Controlled independent probes establish the actual prerequisite failure:
+
+| Probe | Result |
+| --- | --- |
+| Python `os.symlink` in original checkout Windows ephemeral directory | WinError 1314, no link created |
+| Same Python call in staging Windows ephemeral directory | WinError 1314, no link created |
+| Fresh Dart `Link.createSync` with Dart 3.4.4 (Flutter 3.22.3) | Exit 1, OS error 1314 |
+| Same Dart call with Dart 3.5.4 (Flutter 3.24.5) | Exit 1, OS error 1314 |
+
+Therefore this is not a privilege requirement unique to Flutter 3.22.3 or a
+staging-directory permission difference. The process is not administrator.
+Read-only registry inspection finds the `AppModelUnlock` key but no
+`AllowDevelopmentWithoutDevLicense` value. No registry/security change was made.
+
+Both SDKs' `packages/flutter_tools/lib/src/flutter_plugins.dart` write plugin
+metadata before conditionally creating links in `refreshPluginsList` (only when
+the plugin-change flags request it). Both use `link.createSync(path)` for new
+links. The existing checkout reports 17 Windows plugins but its `.plugin_symlinks`
+directory contains **zero** links (directory last modified 13:49:05, before the
+later successful pub resolution). Thus the successful repeated `pub get` did not
+exercise fresh creation. Do not infer healthy symlink permissions from its exit.
+The Windows build path independently calls `createPluginSymlinks`.
+
+Local reproducible probe sources are outside Git: `<tools>/symlink_probe.py`
+(checkout and staging) and `<tools>/symlink_probe.dart` (both Dart SDKs).
+Log SHA256 identifiers:
+- `bridge-stage-pub-get.log`: `C2CA65B20E6B234F53227342B87BE4C34FB21A6589A53313D43D89463F6A83AA`.
+- `symlink-python-comparison.log`: `9B102337E063E97DEEC1E2FFE76E80B634304D43A44766E0A0B9B82187D9708E`.
+- Both Dart logs: `D6B01E26614DF3E20F0D0D13C5CD01DBCB2E8B88D821404FF834C3CAECF7B04D`.
+
+Exact next step: the operator must resolve fresh-link permission for this process,
+then require the external Python probe and both Dart probes to pass. Re-run
+Flutter 3.22.3 `pub get` in the existing generation staging directory and require
+exit 0 before the exact bridge generator/full build. No generated bridge, full
+client build or GUI smoke was claimed. LLVM is verified, vcpkg is preserved,
+all installation/probe processes completed, and PR #6 remains draft without merge.
