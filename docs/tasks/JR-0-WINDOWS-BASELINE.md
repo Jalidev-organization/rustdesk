@@ -548,3 +548,30 @@ or GUI smoke is claimed at this checkpoint. Next: collect the build's actual
 exit status, inspect the real runner executable (path, size, SHA256), then perform
 coordinated visual launch, close/reopen and fatal-log checks. Issue #2 stays open;
 PR #6 stays draft on `jali-remote/foundation`, awaiting user review, without merge.
+## Native Windows build completed; visual smoke pending
+
+The resumed official build completed with **WINDOWS_BUILD_EXIT=0**. Auxiliary
+virtual display Release compilation took 3m 28s; the main Rust Release build
+finished in 11m 18s with 16 existing warnings, and Flutter Windows completed in
+163.9s. No source workaround or cleanup was applied. The build resolved the
+native LLVM prerequisite using the actual installed library.
+
+Final **client runner**, not the auxiliary DLL:
+- Path: `C:/Users/Jali-dev/Documents/rustdesk-jr0/flutter/build/windows/x64/runner/Release/rustdesk.exe`.
+- Size: **360960 bytes**.
+- SHA256: `77A333854C407F79EA10FAA487F4C8EB121863E12AF9F275ABB782AD037C1B66`.
+- Keep the entire Release directory alongside this runner; Flutter runtime,
+  plugins, native Rust library and data are required. The runner alone is not
+  a self-contained portable distribution (portable packaging was skipped).
+
+Evidence hashes:
+- Successful bridge log: `457B0F0995D83AF694E49E89EC6F0625106BC3986981BE729B8CF51CC360C92C`.
+- Completed Windows build log: `DD9CCE82B86E2BAE8F62BCA292E1EEB27F2472348CF51FA500C1DECDEF26EA38`.
+
+`git status --short` remains empty after the build: no tracked dependency,
+source or submodule changes. Only task documentation is versioned. **Criterion A
+is still pending**: the coordinator has the exact executable and must verify a
+real functional graphical window, close it, reopen it, and inspect fatal startup
+logs before a success claim. No launch was inferred from compilation. Two-PC
+cross-network validation remains separate. Issue #2 remains open and PR #6 draft,
+awaiting the user's review; neither merge nor JR-1 is authorized.
