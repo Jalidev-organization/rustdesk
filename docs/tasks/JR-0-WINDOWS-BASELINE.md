@@ -57,7 +57,7 @@ A) a Windows build succeeds and its artifact path plus smoke test are documented
 B) a reproducible blocker is documented with enough evidence for another agent to continue immediately.
 
 ## Status
-- State: blocked (criterion B, reproducible prerequisites)
+- State: blocked (criterion B; Flutter symlink check now passes, LLVM location remains unverified)
 - Baseline branch: `jali-remote/foundation`
 - Upstream-derived default branch: `master`
 - Product behavior changes allowed: **none**
@@ -360,3 +360,50 @@ lockfile changes were restored and all build/download logs stay external.
 The inherited build warnings were left untouched. No review receipt or runtime
 approval is claimed. The PR remains draft and must not be merged as a validated
 Windows baseline.
+## Resumed prerequisite verification (2026-10-04)
+
+This update supersedes the earlier symlink blocker. Continued the **same**
+checkout and `jr/2-windows-baseline` branch at `c091e87a238cd6ee712298d50e29851412f6d8b5`;
+no clone, reset or restart. Re-read repository instructions, task, native bridge
+workflow, issue #2 and PR #6. Receipt-driven review remains off/default.
+
+- Flutter 3.24.5 `flutter pub get`: **exit 0**. The previous symlink error no longer
+  occurs. No global security setting or environment variable was changed.
+- The generated `flutter/pubspec.lock` delta was saved externally to
+  `<logs>/resume-pubspec-lock-generated.diff`, then only that own generated delta
+  was restored. No product/dependency source edit is included.
+- `<logs>/resume-flutter-pub-get.log` SHA256:
+  `4B4B86E94A474B3B1E7F05D5EE9722372052117D036699963BD8A29F02FFCD67`.
+- `vcpkg list --x-install-root=<tools>/vcpkg/installed` confirms the same 16
+  previously installed native packages. They were not rebuilt or replaced.
+- LLVM 15.0.6 is **not yet located or verified**. This does not establish whether
+  the operator installed it somewhere else. `clang` is absent from the current
+  PATH; process/user/machine `LIBCLANG_PATH` values are empty. No LLVM entry was
+  found in the inspected machine/user uninstall registry locations.
+
+Bounded location search inspected roots `C:/`, `D:/`, `E:/`, `F:/`, `G:/`,
+`C:/Program Files`, `C:/Program Files (x86)`, the user's `Downloads`,
+`AppData/Local/Programs`, `bin`, and the isolated `jr0-tools` directory. No LLVM
+installation/installer candidate or `clang.exe`/`libclang.dll` was identified.
+Specifically, neither `C:/Program Files/LLVM/bin/libclang.dll` nor
+`<tools>/llvm-15.0.6/bin/libclang.dll` exists. No whole-disk recursive search,
+installation retry, security change or policy bypass was performed.
+
+### Current blocking input and exact next step
+
+Obtain the actual LLVM 15.0.6 installation directory from the operator. Then
+verify, using that confirmed path rather than a guessed replacement:
+
+```powershell
+$llvm='<operator-confirmed LLVM 15.0.6 directory>'
+& "$llvm/bin/clang.exe" --version
+Test-Path "$llvm/bin/libclang.dll"
+$env:LIBCLANG_PATH="$llvm/bin" # process-local only
+python -c "import ctypes, os; ctypes.CDLL(os.path.join(os.environ['LIBCLANG_PATH'], 'libclang.dll')); print('LIBCLANG_LOAD_OK')"
+```
+
+Require the correct version, DLL existence and usable load before matching bridge
+generation and the documented full build command. Neither bridge generation nor
+a new full build was launched while this prerequisite remained unverified.
+No completed client executable or smoke result is claimed; PR #6 stays draft,
+issue #2 stays open, and no merge or JR-1 advance is authorized by this checkpoint.
