@@ -57,7 +57,7 @@ A) a Windows build succeeds and its artifact path plus smoke test are documented
 B) a reproducible blocker is documented with enough evidence for another agent to continue immediately.
 
 ## Status
-- State: blocked (criterion B; Flutter symlink check now passes, LLVM location remains unverified)
+- State: in progress (LLVM and Flutter prerequisites verified; bridge/full build pending)
 - Baseline branch: `jali-remote/foundation`
 - Upstream-derived default branch: `master`
 - Product behavior changes allowed: **none**
@@ -407,3 +407,34 @@ generation and the documented full build command. Neither bridge generation nor
 a new full build was launched while this prerequisite remained unverified.
 No completed client executable or smoke result is claimed; PR #6 stays draft,
 issue #2 stays open, and no merge or JR-1 advance is authorized by this checkpoint.
+## Verified prerequisites and bridge preparation checkpoint
+
+A later machine recheck found the operator-installed LLVM in
+`C:/Program Files/LLVM/bin`. `clang --version` reports **15.0.6** and a Python
+`ctypes.CDLL` load of `libclang.dll` with process-local `LIBCLANG_PATH` succeeds
+(`LIBCLANG_LOAD_OK`). DLL SHA256:
+`B90F2E03218825C637CA313C6F4781F241845BA1679EE3618AF36A2A967A22CF`.
+The previous LLVM location blocker is resolved. Flutter 3.24.5 `pub get` again
+exits 0; its generated lockfile delta was saved externally and restored.
+Existing vcpkg dependencies remain installed. No global environment changed.
+
+Preparing the bridge with `.github/workflows/bridge.yml` pins: Rust 1.75.0 plus
+rustfmt, cargo-expand 1.0.95, flutter_rust_bridge_codegen 1.80.1 with UUID, and
+separate Flutter 3.22.3 SDK at `<tools>/flutter-bridge-3.22.3` (framework
+`b0850beeb25f6d5b10426284f506557f66181b36`). cargo-expand installed successfully.
+Other preparation/generation results remain pending at this checkpoint.
+
+The workflow's `extended_text: 14.0.0` to `13.0.0` adaptation is confined to
+`<tools>/bridge-stage-533d38d67`, made with `git archive` of the same checkout's
+commit `533d38d67` plus an archive of its pinned `hbb_common` submodule. This is
+an external generation copy, not a fresh project clone or checkout reset. The
+real product pubspec/source is unchanged. The inherited bridge CI host is Linux;
+local generator execution will use Windows with the same pinned tools/invocation.
+`wsl --list --quiet` reports WSL is not installed; no system installation attempted.
+
+Next: finish SDK/tool installation and staged pub resolution, run the workflow's
+exact bridge generator command, copy only its declared generated outputs to the
+original checkout, then run the documented native Windows build with
+`CARGO_TARGET_DIR` removed only in the child build shell. No completed client,
+GUI launch or criterion A proof exists yet. Progress is also recorded in issue #2;
+PR #6 remains draft on the foundation base, without merge or JR-1 work.
